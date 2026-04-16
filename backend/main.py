@@ -65,6 +65,10 @@ def upload_resume(
     db: Session = Depends(get_db)
 ):
     text = extract_text_from_file(file)
+    
+    # Check resume safety - ALWAYS accept resumes
+    safety_check = NLPEngine.check_resume_safety(text)
+    
     anonymized_text = NLPEngine.anonymize_resume(text)
     skills = NLPEngine.extract_skills(text)
     
@@ -74,15 +78,21 @@ def upload_resume(
         anonymized_id=anonymized_id,
         resume_text=anonymized_text,
         skills={"skills": skills},
-        projects=[], # To be filled via separate logic or manual entry
-        experience_years=0.0, # Heuristic would be needed here
+        projects=[],
+        experience_years=0.0,
         demographic_info={"group": demographic_group}
     )
     db.add(db_candidate)
     db.commit()
     db.refresh(db_candidate)
     
-    return {"message": "Resume uploaded and anonymized", "candidate_id": db_candidate.id, "anonymized_id": anonymized_id}
+    return {
+        "message": "Resume uploaded, anonymized, and accepted for fair evaluation",
+        "candidate_id": db_candidate.id,
+        "anonymized_id": anonymized_id,
+        "safety_status": safety_check,
+        "note": "All resumes are evaluated fairly. No filtering based on education or career path."
+    }
 
 @app.post("/evaluate")
 def evaluate_candidate(candidate_id: int, job_id: int, db: Session = Depends(get_db)):
@@ -210,6 +220,51 @@ def get_fairness_report(job_id: int, db: Session = Depends(get_db)):
         
     db.commit()
     return report
+
+@app.post("/check-university-bias")
+def check_university_bias(job_id: int, db: Session = Depends(get_db)):
+    """Check if job description contains university bias (Ivy League, etc.)"""
+    jd = db.query(models.JobDescription).filter(models.JobDescription.id == job_id).first()
+    if not jd:
+        raise HTTPException(status_code=404, detail="Job Description not found")
+    
+    bias_report = NLPEngine.detect_university_bias(jd.description)
+    return {
+        "job_id": job_id,
+        "jd_title": jd.title,
+        **bias_report
+    }
+
+@app.post("/check-gender-bias")
+def check_gender_bias(job_id: int, db: Session = Depends(get_db)):
+    """Advanced gender bias detection in job description"""
+    jd = db.query(models.JobDescription).filter(models.JobDescription.id == job_id).first()
+    if not jd:
+        raise HTTPException(status_code=404, detail="Job Description not found")
+    
+    bias_report = NLPEngine.detect_gender_bias_advanced(jd.description)
+    return {
+        "job_id": job_id,
+        "jd_title": jd.title,
+        **bias_report
+    }
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "message": "EquiHire API is running",
+        "version": "1.0.0",
+        "features": [
+            "Job Description Auditing",
+            "Resume Anonymization",
+            "Fair Skill Matching",
+            "Gender Bias Detection",
+            "University Bias Detection",
+            "Fairness Audit Reporting"
+        ]
+    }
 
 if __name__ == "__main__":
     import uvicorn
