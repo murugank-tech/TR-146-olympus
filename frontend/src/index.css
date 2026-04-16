@@ -53,7 +53,7 @@ select {
 }
 
 textarea {
-  @apply resize-vertical;
+  @apply resize-y;
 }
 
 /* Animations */
