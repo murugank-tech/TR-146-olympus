@@ -105,13 +105,14 @@ def evaluate_candidate(candidate_id: int, job_id: int, db: Session = Depends(get
     match_results = NLPEngine.match_skills(candidate.skills.get("skills", []), jd.cleaned_description)
     
     skill_score = match_results["score"]
-    project_score = 0.0 # Placeholder for Project Intelligence Scorer
+    project_score = candidate.project_score or 0.0
     test_score = 0.0 # Placeholder for Adaptive Skill Test Engine
     
-    final_score = (skill_score * 0.7) + (project_score * 0.15) + (test_score * 0.15)
+    final_score = (skill_score * 0.65) + (project_score * 0.25) + (test_score * 0.10)
     
     explanation = f"Matched skills: {', '.join(match_results['matched_skills'][:5])}. "
-    explanation += f"Missing critical areas: {', '.join(match_results['missing_skills'][:3])}."
+    explanation += f"Missing critical areas: {', '.join(match_results['missing_skills'][:3])}. "
+    explanation += f"Project intelligence score: {project_score}."
     
     db_eval = models.Evaluation(
         candidate_id=candidate_id,
@@ -152,19 +153,31 @@ def score_projects(candidate_id: int, projects: List[Dict[str, Any]], db: Sessio
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
         
-    # Complexity scoring based on tech stack count and description length
-    total_score = 0
-    for p in projects:
-        stack_score = len(p.get("tech_stack", [])) * 10
-        desc_score = len(p.get("description", "")) / 10
-        total_score += (stack_score + desc_score)
-        
-    avg_score = min(100, total_score / max(1, len(projects)))
+    project_results = NLPEngine.score_projects(projects)
     
     candidate.projects = projects
+    candidate.project_score = project_results["score"]
+    candidate.project_summary = project_results["summary"]
     db.commit()
+    db.refresh(candidate)
     
-    return {"candidate_id": candidate_id, "project_score": avg_score}
+    return {
+        "candidate_id": candidate_id,
+        "project_score": project_results["score"],
+        "project_summary": project_results["summary"],
+        "details": project_results["project_details"]
+    }
+
+@app.get("/candidates", response_model=List[schemas.CandidateResponse])
+def list_candidates(db: Session = Depends(get_db)):
+    return db.query(models.Candidate).order_by(models.Candidate.created_at.desc()).all()
+
+@app.get("/candidates/{candidate_id}", response_model=schemas.CandidateResponse)
+def get_candidate(candidate_id: int, db: Session = Depends(get_db)):
+    candidate = db.query(models.Candidate).filter(models.Candidate.id == candidate_id).first()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    return candidate
 
 @app.get("/rankings/{job_id}", response_model=List[schemas.EvaluationResponse])
 def get_rankings(job_id: int, db: Session = Depends(get_db)):
@@ -260,6 +273,7 @@ def health_check():
             "Job Description Auditing",
             "Resume Anonymization",
             "Fair Skill Matching",
+            "Project Intelligence Scoring",
             "Gender Bias Detection",
             "University Bias Detection",
             "Fairness Audit Reporting"

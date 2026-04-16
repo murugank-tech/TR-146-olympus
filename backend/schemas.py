@@ -6,6 +6,8 @@ class CandidateBase(BaseModel):
     anonymized_id: str
     skills: Dict[str, Any]
     projects: List[Dict[str, Any]]
+    project_score: float = 0.0
+    project_summary: Optional[str] = None
     experience_years: float
 
 class CandidateCreate(CandidateBase):

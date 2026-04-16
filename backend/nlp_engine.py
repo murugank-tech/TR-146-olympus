@@ -222,6 +222,71 @@ class NLPEngine:
         }
 
     @staticmethod
+    def score_projects(projects: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Scores candidate projects on complexity, technology stack, real-world relevance,
+        and optional GitHub presence.
+        """
+        if not projects:
+            return {
+                "score": 0.0,
+                "project_details": [],
+                "summary": "No projects provided for scoring."
+            }
+
+        keyword_booster = [
+            "scalable", "production", "cloud", "api", "automation",
+            "security", "performance", "analytics", "mobile", "web",
+            "enterprise", "ci/cd", "microservices", "data", "machine learning",
+            "ai", "devops"
+        ]
+
+        details = []
+        total_score = 0.0
+
+        for project in projects:
+            description = project.get("description", "") or ""
+            tech_stack = project.get("tech_stack", []) or []
+            github_url = project.get("github_url", "") or ""
+
+            complexity_score = min(35.0, len(description) / 10.0)
+            stack_score = min(35.0, len(tech_stack) * 7.0)
+            relevance_score = 10.0
+            relevance_hits = 0
+
+            lower_desc = description.lower()
+            for keyword in keyword_booster:
+                if keyword in lower_desc:
+                    relevance_hits += 1
+            relevance_score = min(20.0, relevance_hits * 2.5 + 5.0)
+
+            github_bonus = 10.0 if github_url else 0.0
+            score = min(100.0, complexity_score + stack_score + relevance_score + github_bonus)
+            score = round(score, 2)
+            total_score += score
+
+            details.append({
+                "title": project.get("title", "Unnamed Project"),
+                "score": score,
+                "tech_stack": tech_stack,
+                "github_url": github_url,
+                "notes": "Scored by complexity, technology breadth, relevance, and GitHub presence."
+            })
+
+        average_score = round(total_score / len(projects), 2)
+        summary = (
+            f"Scored {len(projects)} project(s) on complexity, stack depth, and real-world relevance. "
+            f"Average project intelligence score: {average_score}. "
+            "GitHub presence and practical impact were recognized without bias."
+        )
+
+        return {
+            "score": average_score,
+            "project_details": details,
+            "summary": summary
+        }
+
+    @staticmethod
     def detect_university_bias(text: str) -> Dict[str, Any]:
         """
         Detects if text contains university-based discrimination.

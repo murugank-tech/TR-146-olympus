@@ -11,6 +11,8 @@ class Candidate(Base):
     resume_text = Column(Text)
     skills = Column(JSON)
     projects = Column(JSON)
+    project_score = Column(Float, default=0.0)
+    project_summary = Column(Text, default="")
     experience_years = Column(Float)
     demographic_info = Column(JSON) # Hidden from evaluation, used only for fairness audit
     created_at = Column(DateTime, default=datetime.utcnow)
